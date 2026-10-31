@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>Valorant Aim Trainer</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #0f1923; /* Valorant 經典暗色背景 */
+      color: #ece8e1;
+      font-family: 'Segoe UI', sans-serif;
+      user-select: none;
+    }
+    #ui {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      background: rgba(15, 25, 35, 0.85);
+      padding: 15px 20px;
+      border-left: 4px solid #ff4655; /* Valorant 紅色邊框 */
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    canvas {
+      display: block;
+      cursor: none; /* 隱藏原生游標 */
+    }
+    button {
+      background: #ff4655;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover { background: #e03e4d; }
+    input {
+      width: 60px;
+      background: #1f2326;
+      color: white;
+      border: 1px solid #36393e;
+      padding: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="ui">
+    <h2>VALORANT 爆頭線練習</h2>
+    <div>
+      <label>Valorant Sens: </label>
+      <input type="number" id="sensInput" value="0.4" step="0.05">
+    </div>
+    <p>得分: <span id="score">0</span> | 命中率: <span id="acc">100%</span></p>
+    <button id="startBtn">點擊開始 (Lock Mouse)</button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const sensInput = document.getElementById('sensInput');
+    const startBtn = document.getElementById('startBtn');
+    const scoreEl = document.getElementById('score');
+    const accEl = document.getElementById('acc');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 遊戲狀態
+    let isPlaying = false;
+    let score = 0;
+    let totalShots = 0;
+    let hits = 0;
+
+    // 準心位置 (畫面的幾何中心起算)
+    let crosshair = { x: canvas.width / 2, y: canvas.height / 2 };
+
+    // 目標 (靶)
+    const targetRadius = 18; // 模擬頭部大小
+    let target = { x: 0, y: 0 };
+
+    // 產生新目標 (固定在特戰爆頭線高度)
+    function spawnTarget() {
+      const headshotY = canvas.height * 0.45; // 固定水平爆頭線高度
+      target.x = Math.random() * (canvas.width - 200) + 100;
+      target.y = headshotY + (Math.random() * 20 - 10); // 微幅上下震盪，模擬不同地形高度
+    }
+
+    // 滑鼠鎖定與移動控制
+    startBtn.addEventListener('click', () => {
+      canvas.requestPointerLock();
+      isPlaying = true;
+      score = 0;
+      totalShots = 0;
+      hits = 0;
+      updateStats();
+      spawnTarget();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (document.pointerLockElement === canvas) {
+        const sens = parseFloat(sensInput.value) || 0.4;
+        // 靈敏度加權換算 (可根據實際手感再調整 multiplier)
+        const multiplier = sens * 1.2; 
+        
+        crosshair.x += e.movementX * multiplier;
+        crosshair.y += e.movementY * multiplier;
+
+        // 邊界限制
+        crosshair.x = Math.max(0, Math.min(canvas.width, crosshair.x));
+        crosshair.y = Math.max(0, Math.min(canvas.height, crosshair.y));
+      }
+    });
+
+    // 射擊擊中判定
+    document.addEventListener('mousedown', (e) => {
+      if (document.pointerLockElement !== canvas || !isPlaying) return;
+
+      if (e.button === 0) { // 左鍵
+        totalShots++;
+        const dist = Math.hypot(crosshair.x - target.x, crosshair.y - target.y);
+        
+        if (dist < targetRadius) {
+          hits++;
+          score += 100;
+          spawnTarget(); // 擊中後換下一靶
+        }
+        updateStats();
+      }
+    });
+
+    function updateStats() {
+      scoreEl.textContent = score;
+      const acc = totalShots === 0 ? 100 : Math.round((hits / totalShots) * 100);
+      accEl.textContent = acc + '%';
+    }
+
+    // 繪製畫面 (Loop)
+    function draw() {
+      // 背景
+      ctx.fillStyle = '#0f1923';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 繪製爆頭輔助參考線 (淡灰色)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height * 0.45);
+      ctx.lineTo(canvas.width, canvas.height * 0.45);
+      ctx.stroke();
+      ctx.setLineDash([]); // 還原實線
+
+      // 繪製目標 (靶) - 經典特戰紅/亮點
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, targetRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff4655';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // 繪製玩家準心 (綠色十字準心)
+      if (document.pointerLockElement === canvas) {
+        ctx.strokeStyle = '#00ffaa';
+        ctx.lineWidth = 2;
+        const size = 8;
+        const gap = 3;
+
+        ctx.beginPath();
+        // 上下左右十字
+        ctx.moveTo(crosshair.x, crosshair.y - gap);
+        ctx.lineTo(crosshair.x, crosshair.y - gap - size);
+        ctx.moveTo(crosshair.x, crosshair.y + gap);
+        ctx.lineTo(crosshair.x, crosshair.y + gap + size);
+        ctx.moveTo(crosshair.x - gap, crosshair.y);
+        ctx.lineTo(crosshair.x - gap - size, crosshair.y);
+        ctx.moveTo(crosshair.x + gap, crosshair.y);
+        ctx.lineTo(crosshair.x + gap + size, crosshair.y);
+        ctx.stroke();
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    draw();
+
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+  </script>
+</body>
+</html>
